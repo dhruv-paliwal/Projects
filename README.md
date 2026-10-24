@@ -1,4 +1,4 @@
-# Shree Ganesh LPG Agency - Distribution & Consumer Management System
+LPG Agency - Distribution & Consumer Management System
 ### Specialized Enterprise System for Kanpur Nagar, Kanpur Dehat & Hamirpur Territory (Agency Code: UP-KNP-78401)
 
 A complete, production-ready, full-stack enterprise web platform and operational command center engineered specifically for authorized LPG distributorship agencies handling over **22,000+ registered domestic and commercial consumers**.
