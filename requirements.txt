@@ -1,0 +1,8 @@
+Django>=5.0,<7.0
+mysql-connector-python>=9.0.0
+streamlit>=1.35.0
+pandas>=2.2.0
+requests>=2.31.0
+altair>=5.0.0
+gunicorn>=21.2.0
+whitenoise>=6.6.0
