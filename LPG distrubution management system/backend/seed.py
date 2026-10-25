@@ -15,8 +15,10 @@ if hasattr(sys.stderr, 'reconfigure'):
 
 import django
 import random
+import uuid
 from datetime import timedelta
 from decimal import Decimal
+from django.db import transaction, IntegrityError
 
 # Configure Django environment
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'lpg_manager.settings')
@@ -292,6 +294,11 @@ def seed_consumers(count=300):
 
 def seed_orders(consumers, count=80):
     print(f"\n-> Seeding {count} LPG Cylinder Bookings and Transactions...")
+    existing_count = Order.objects.count()
+    if existing_count >= count:
+        print(f"   Orders already exist ({existing_count} records). Skipping creation.")
+        return
+
     stocks = list(CylinderStock.objects.all())
     routes = list(DeliveryRoute.objects.all())
     if not stocks or not consumers:
@@ -300,13 +307,14 @@ def seed_orders(consumers, count=80):
 
     now = timezone.now()
     orders_created = 0
+    to_create = count - existing_count
 
     # Ensure 14.2kg is most common
     domestic_stock = next((s for s in stocks if '14.2kg' in s.cylinder_type), stocks[0])
     commercial_stock = next((s for s in stocks if '19kg' in s.cylinder_type), stocks[0])
     mini_stock = next((s for s in stocks if '5kg' in s.cylinder_type), stocks[0])
 
-    for i in range(count):
+    for i in range(to_create):
         consumer = random.choice(consumers)
         
         # Pick cylinder according to connection type
@@ -340,27 +348,36 @@ def seed_orders(consumers, count=80):
 
         unit_price = stock.price
         total_price = unit_price * quantity
-        order_num = f"ORD-{booking_time.strftime('%Y%m%d')}-{random.randint(1000, 9999)}"
 
-        order = Order.objects.create(
-            order_id=order_num,
-            consumer=consumer,
-            cylinder_type=stock,
-            route=route,
-            quantity=quantity,
-            unit_price=unit_price,
-            total_price=total_price,
-            delivery_status=status,
-            payment_status=payment_status,
-            payment_reference=f"UPI{random.randint(1000000000, 9999999999)}" if payment_status == 'UPI_ONLINE' else '',
-            delivery_dac=dac_code,
-            delivery_date=delivery_date
-        )
-        # Update auto booking date
-        Order.objects.filter(id=order.id).update(booking_date=booking_time)
-        orders_created += 1
+        # Guarantee unique order_id with UUID suffix and DB collision check
+        while True:
+            order_num = f"ORD-{booking_time.strftime('%Y%m%d')}-{uuid.uuid4().hex[:6].upper()}"
+            if not Order.objects.filter(order_id=order_num).exists():
+                break
 
-    print(f"   Successfully created {orders_created} orders! Total in DB: {Order.objects.count()}")
+        try:
+            with transaction.atomic():
+                order = Order.objects.create(
+                    order_id=order_num,
+                    consumer=consumer,
+                    cylinder_type=stock,
+                    route=route,
+                    quantity=quantity,
+                    unit_price=unit_price,
+                    total_price=total_price,
+                    delivery_status=status,
+                    payment_status=payment_status,
+                    payment_reference=f"UPI{random.randint(1000000000, 9999999999)}" if payment_status == 'UPI_ONLINE' else '',
+                    delivery_dac=dac_code,
+                    delivery_date=delivery_date
+                )
+                # Update auto booking date
+                Order.objects.filter(id=order.id).update(booking_date=booking_time)
+                orders_created += 1
+        except IntegrityError:
+            continue
+
+    print(f"   Successfully processed orders! Total in DB: {Order.objects.count()}")
 
 
 def main():
